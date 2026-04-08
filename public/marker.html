@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>Cesium Marker Example</title>
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.133/Build/Cesium/Cesium.js"></script>
+  <link
+    href="https://cesium.com/downloads/cesiumjs/releases/1.133/Build/Cesium/Widgets/widgets.css"
+    rel="stylesheet"
+  />
+  <style>
+    html, body, #cesiumContainer {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .marker-info {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      z-index: 10;
+      min-width: 240px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      background: rgba(20, 20, 20, 0.85);
+      color: #fff;
+      font: 14px/1.5 Arial, sans-serif;
+    }
+
+    .marker-info strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 15px;
+    }
+  </style>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+  <div id="markerInfo" class="marker-info">마커를 클릭하세요.</div>
+
+  <script>
+	Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJkODk4ZDliNS03NGQ4LTRiYmUtOTg1NS1iOTE1MmRmYTg0NmQiLCJpZCI6MzI4MzY5LCJpYXQiOjE3NTQyNzk4MjF9.o2SCIP-TECRFhK9xKGkFGEKfaCxRrOk143V_9k4ZXQA';
+
+    // 1) Viewer 생성
+    const viewer = new Cesium.Viewer("cesiumContainer", {
+      animation: false,
+      timeline: false,
+      selectionIndicator: true,
+      infoBox: false
+    });
+
+    // 2) 시작 카메라 - 광안리
+    viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(129.1187, 35.1532, 2500),
+      orientation: {
+        heading: Cesium.Math.toRadians(0.0),
+        pitch: Cesium.Math.toRadians(-45.0),
+        roll: 0.0
+      }
+    });
+
+    // 3) 마커 데이터
+    // markerClass: HTML class가 아니라 엔티티 분류용 메타데이터
+    const markerData = [
+      {
+        id: "marker-01",
+        name: "광안리 해변",
+        lon: 129.1187,
+        lat: 35.1532,
+        height: 0,
+        markerClass: "spot-beach",
+        category: "beach",
+        color: Cesium.Color.CYAN,
+        labelText: "광안리 해변"
+      },
+      {
+        id: "marker-02",
+        name: "광안대교 뷰포인트",
+        lon: 129.1215,
+        lat: 35.1498,
+        height: 0,
+        markerClass: "spot-bridge",
+        category: "bridge",
+        color: Cesium.Color.ORANGE,
+        labelText: "광안대교 뷰포인트"
+      },
+      {
+        id: "marker-03",
+        name: "민락수변공원",
+        lon: 129.1252,
+        lat: 35.1546,
+        height: 0,
+        markerClass: "spot-park",
+        category: "park",
+        color: Cesium.Color.LIME,
+        labelText: "민락수변공원"
+      }
+    ];
+
+    // 4) 엔티티 생성 함수
+    function addMarker(item) {
+      return viewer.entities.add({
+        id: item.id,
+        name: item.name,
+
+        position: Cesium.Cartesian3.fromDegrees(item.lon, item.lat, item.height),
+
+        // "클래스"처럼 사용할 메타데이터
+        properties: new Cesium.PropertyBag({
+          markerClass: item.markerClass,
+          category: item.category,
+          lon: item.lon,
+          lat: item.lat
+        }),
+
+        // 간단한 점 마커
+        point: {
+          pixelSize: 12,
+          color: item.color,
+          outlineColor: Cesium.Color.WHITE,
+          outlineWidth: 2,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY
+        },
+
+        // 라벨
+        label: {
+          text: item.labelText,
+          font: "bold 14px Arial",
+          fillColor: Cesium.Color.WHITE,
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          showBackground: true,
+          backgroundColor: Cesium.Color.fromBytes(0, 0, 0, 160),
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          pixelOffset: new Cesium.Cartesian2(0, -18),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+
+          // 멀리서 라벨이 너무 크지 않게
+          scaleByDistance: new Cesium.NearFarScalar(500, 1.0, 10000, 0.6),
+          translucencyByDistance: new Cesium.NearFarScalar(500, 1.0, 30000, 0.2)
+        }
+      });
+    }
+
+    // 5) 마커 3개 추가
+    const entities = markerData.map(addMarker);
+
+    // 6) 겹침 처리 - 클러스터링
+    // 가까운 엔티티를 묶어 숫자로 보여줌
+    viewer.entities.cluster.enabled = true;
+    viewer.entities.cluster.pixelRange = 40;
+    viewer.entities.cluster.minimumClusterSize = 2;
+
+    // 7) 클러스터 스타일 커스터마이징
+    viewer.entities.cluster.clusterEvent.addEventListener(function(clusteredEntities, cluster) {
+      cluster.label.show = true;
+      cluster.label.text = clusteredEntities.length.toString();
+      cluster.label.font = "bold 16px Arial";
+      cluster.label.fillColor = Cesium.Color.WHITE;
+      cluster.label.outlineColor = Cesium.Color.BLACK;
+      cluster.label.outlineWidth = 3;
+      cluster.label.style = Cesium.LabelStyle.FILL_AND_OUTLINE;
+      cluster.label.showBackground = true;
+      cluster.label.backgroundColor = Cesium.Color.fromBytes(30, 70, 140, 220);
+      cluster.label.disableDepthTestDistance = Number.POSITIVE_INFINITY;
+
+      // 기본 빌보드/포인트는 숨기고 라벨형 클러스터만 사용
+      cluster.billboard.show = false;
+      cluster.point.show = true;
+      cluster.point.pixelSize = 28;
+      cluster.point.color = Cesium.Color.fromBytes(30, 70, 140, 200);
+      cluster.point.outlineColor = Cesium.Color.WHITE;
+      cluster.point.outlineWidth = 3;
+      cluster.point.disableDepthTestDistance = Number.POSITIVE_INFINITY;
+    });
+
+    // 8) 클릭 처리
+    const infoEl = document.getElementById("markerInfo");
+    const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+
+    handler.setInputAction(function(click) {
+      const picked = viewer.scene.pick(click.position);
+
+      if (!Cesium.defined(picked) || !picked.id) {
+        infoEl.innerHTML = "마커를 클릭하세요.";
+        return;
+      }
+
+      const entity = picked.id;
+      const props = entity.properties;
+
+      const markerClass = props?.markerClass?.getValue(Cesium.JulianDate.now()) ?? "-";
+      const category = props?.category?.getValue(Cesium.JulianDate.now()) ?? "-";
+      const lon = props?.lon?.getValue(Cesium.JulianDate.now()) ?? "-";
+      const lat = props?.lat?.getValue(Cesium.JulianDate.now()) ?? "-";
+
+      infoEl.innerHTML = `
+        <strong>${entity.name}</strong>
+        id: ${entity.id}<br>
+        class: ${markerClass}<br>
+        category: ${category}<br>
+        lon: ${lon}<br>
+        lat: ${lat}
+      `;
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+    // 9) 특정 "클래스"만 보이기/숨기기 예시
+    function setVisibleByMarkerClass(targetClass, visible) {
+      viewer.entities.values.forEach((entity) => {
+        const cls = entity.properties?.markerClass?.getValue(Cesium.JulianDate.now());
+        if (cls === targetClass) {
+          entity.show = visible;
+        }
+      });
+    }
+
+    // 예시 사용:
+    // setVisibleByMarkerClass("spot-bridge", false);
+
+    // 10) 특정 category 색상 일괄 변경 예시
+    function updatePointColorByCategory(category, color) {
+      viewer.entities.values.forEach((entity) => {
+        const currentCategory = entity.properties?.category?.getValue(Cesium.JulianDate.now());
+        if (currentCategory === category && entity.point) {
+          entity.point.color = color;
+        }
+      });
+    }
+
+    // 예시 사용:
+    // updatePointColorByCategory("park", Cesium.Color.RED);
+
+  </script>
+</body>
+</html>
