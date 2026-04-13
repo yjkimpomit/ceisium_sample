@@ -42,7 +42,6 @@
 <body>
 	<div id="cesiumContainer"></div>
 	<div id="markerInfo" class="marker-info">마커를 클릭하세요.</div>
-	<div id="marker01"></div>
 
 	<script>
 		Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJkODk4ZDliNS03NGQ4LTRiYmUtOTg1NS1iOTE1MmRmYTg0NmQiLCJpZCI6MzI4MzY5LCJpYXQiOjE3NTQyNzk4MjF9.o2SCIP-TECRFhK9xKGkFGEKfaCxRrOk143V_9k4ZXQA';
@@ -54,6 +53,7 @@
 			infoBox: false
 		});
 
+		// 시작 카메라
 		viewer.camera.flyTo({
 			destination: Cesium.Cartesian3.fromDegrees(127.5, 37.0, 800000),
 			orientation: {
@@ -63,7 +63,39 @@
 			}
 		});
 
-		// completed: true = 완성 / false = 미완성
+		// 상태 라벨
+		const STATUS_LABEL = {
+			done: "구축완료",
+			ready: "구축준비",
+			unknown: "미정"
+		};
+
+		// 상태별 스타일
+		const STATUS_STYLE = {
+			done: {
+				pointColor: null, // 개별 color 사용
+				pointSize: 20,
+				outlineWidth: 4,
+				labelShow: true,
+				labelFont: "bold 24px 'Noto Sans KR'"
+			},
+			ready: {
+				pointColor: Cesium.Color.fromBytes(150, 150, 150),
+				pointSize: 14,
+				outlineWidth: 2,
+				labelShow: false,
+				labelFont: "bold 24px 'Noto Sans KR'"
+			},
+			unknown: {
+				pointColor: Cesium.Color.fromBytes(110, 110, 110),
+				pointSize: 10,
+				outlineWidth: 2,
+				labelShow: false,
+				labelFont: "bold 24px 'Noto Sans KR'"
+			}
+		};
+
+		// 마커 데이터
 		const markerData = [
 			{
 				id: "marker-01",
@@ -75,7 +107,8 @@
 				category: "Complex Division",
 				color: Cesium.Color.fromBytes(20, 140, 234),
 				labelText: "평택발전본부",
-				completed: true
+				status: "done",
+				url: "/detail/pt"
 			},
 			{
 				id: "marker-02",
@@ -87,7 +120,8 @@
 				category: "Complex Division",
 				color: Cesium.Color.fromBytes(8, 64, 112),
 				labelText: "태안발전본부",
-				completed: true
+				status: "done",
+				url: "/detail/ta"
 			},
 			{
 				id: "marker-03",
@@ -99,7 +133,8 @@
 				category: "Heat & Power Division",
 				color: Cesium.Color.fromBytes(156, 40, 176),
 				labelText: "김포발전본부",
-				completed: true
+				status: "ready",
+				url: "/detail/gp"
 			},
 			{
 				id: "marker-04",
@@ -111,7 +146,8 @@
 				category: "Combined Division",
 				color: Cesium.Color.fromBytes(80, 80, 80),
 				labelText: "서인천발전본부",
-				completed: false
+				status: "unknown",
+				url: "/detail/ic"
 			},
 			{
 				id: "marker-05",
@@ -123,12 +159,22 @@
 				category: "Complex Division",
 				color: Cesium.Color.fromBytes(80, 80, 80),
 				labelText: "군산발전본부",
-				completed: false
+				status: "ready",
+				url: "/detail/gs"
 			}
 		];
 
+		function getStatusStyle(status) {
+			return STATUS_STYLE[status] || STATUS_STYLE.unknown;
+		}
+
+		function getPointColor(item) {
+			const style = getStatusStyle(item.status);
+			return style.pointColor || item.color;
+		}
+
 		function addMarker(item) {
-			const isCompleted = item.completed !== false;
+			const style = getStatusStyle(item.status);
 
 			return viewer.entities.add({
 				id: item.id,
@@ -140,22 +186,21 @@
 					category: item.category,
 					lon: item.lon,
 					lat: item.lat,
-					completed: isCompleted
+					status: item.status,
+					url: item.url || ""
 				}),
 
 				point: {
-					pixelSize: isCompleted ? 20 : 12,
-					color: isCompleted
-						? item.color
-						: Cesium.Color.fromBytes(140, 140, 140),
+					pixelSize: style.pointSize,
+					color: getPointColor(item),
 					outlineColor: Cesium.Color.WHITE,
-					outlineWidth: isCompleted ? 4 : 2,
+					outlineWidth: style.outlineWidth,
 					disableDepthTestDistance: Number.POSITIVE_INFINITY
 				},
 
 				label: {
 					text: item.labelText,
-					font: isCompleted ? "bold 24px 'Noto Sans KR'" : "bold 24px 'Noto Sans KR'",
+					font: style.labelFont,
 					fillColor: Cesium.Color.WHITE,
 					outlineColor: Cesium.Color.BLACK,
 					outlineWidth: 3,
@@ -168,16 +213,15 @@
 					disableDepthTestDistance: Number.POSITIVE_INFINITY,
 					scaleByDistance: new Cesium.NearFarScalar(500, 1.0, 10000, 0.8),
 					translucencyByDistance: new Cesium.NearFarScalar(500, 1.0, 30000, 0.6),
-
-					// 미완성은 기본 숨김
-					show: isCompleted
+					show: style.labelShow
 				}
 			});
 		}
 
 		const entities = markerData.map(addMarker);
 
-		viewer.entities.cluster.enabled = true;
+		// 클러스터링
+		viewer.entities.cluster.enabled = false;
 		viewer.entities.cluster.pixelRange = 40;
 		viewer.entities.cluster.minimumClusterSize = 2;
 
@@ -205,29 +249,42 @@
 		const infoEl = document.getElementById("markerInfo");
 		const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
 
-		// 현재 hover 중인 엔티티 추적
+		function getPickedEntity(position) {
+			const picked = viewer.scene.pick(position);
+
+			if (!Cesium.defined(picked)) return null;
+
+			if (picked.id && picked.id instanceof Cesium.Entity) {
+				return picked.id;
+			}
+
+			if (picked.primitive && picked.primitive.id instanceof Cesium.Entity) {
+				return picked.primitive.id;
+			}
+
+			return null;
+		}
+
 		let hoveredEntity = null;
 
 		function resetMarkerStyle(entity) {
 			if (!entity || !entity.label || !entity.properties) return;
 
-			const isCompleted = entity.properties.completed?.getValue(Cesium.JulianDate.now());
+			const now = Cesium.JulianDate.now();
+			const status = entity.properties.status?.getValue(now);
+			const style = getStatusStyle(status);
 
-			if (isCompleted) {
-				entity.label.show = true;
-				entity.label.font = "bold 24px 'Noto Sans KR'";
-			} else {
-				entity.label.show = false;
-				entity.label.font = "bold 24px 'Noto Sans KR'";
-			}
+			entity.label.show = style.labelShow;
+			entity.label.font = style.labelFont;
 		}
 
 		function applyHoverStyle(entity) {
 			if (!entity || !entity.label || !entity.properties) return;
 
-			const isCompleted = entity.properties.completed?.getValue(Cesium.JulianDate.now());
+			const now = Cesium.JulianDate.now();
+			const status = entity.properties.status?.getValue(now);
 
-			if (isCompleted) {
+			if (status === "done") {
 				entity.label.show = true;
 				entity.label.font = "bold 32px 'Noto Sans KR'";
 			} else {
@@ -236,57 +293,72 @@
 			}
 		}
 
-		// hover 처리
 		handler.setInputAction(function (movement) {
-			const picked = viewer.scene.pick(movement.endPosition);
+			const entity = getPickedEntity(movement.endPosition);
 
-			if (hoveredEntity && (!Cesium.defined(picked) || picked.id !== hoveredEntity)) {
+			if (hoveredEntity && hoveredEntity !== entity) {
 				resetMarkerStyle(hoveredEntity);
 				hoveredEntity = null;
 			}
 
-			if (Cesium.defined(picked) && picked.id) {
-				const entity = picked.id;
-
-				if (hoveredEntity !== entity) {
-					if (hoveredEntity) {
-						resetMarkerStyle(hoveredEntity);
-					}
-
-					hoveredEntity = entity;
-					applyHoverStyle(entity);
-				}
+			if (entity && hoveredEntity !== entity) {
+				hoveredEntity = entity;
+				applyHoverStyle(entity);
 			}
 		}, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
-		// 클릭 처리
 		handler.setInputAction(function (click) {
-			const picked = viewer.scene.pick(click.position);
+			const entity = getPickedEntity(click.position);
 
-			if (!Cesium.defined(picked) || !picked.id) {
+			if (!entity) {
 				infoEl.innerHTML = "마커를 클릭하세요.";
 				return;
 			}
 
-			const entity = picked.id;
 			const props = entity.properties;
+			const now = Cesium.JulianDate.now();
 
-			const markerClass = props?.markerClass?.getValue(Cesium.JulianDate.now()) ?? "-";
-			const category = props?.category?.getValue(Cesium.JulianDate.now()) ?? "-";
-			const lon = props?.lon?.getValue(Cesium.JulianDate.now()) ?? "-";
-			const lat = props?.lat?.getValue(Cesium.JulianDate.now()) ?? "-";
-			const completed = props?.completed?.getValue(Cesium.JulianDate.now()) ? "완성" : "미완성";
+			const markerClass = props?.markerClass?.getValue(now) ?? "-";
+			const category = props?.category?.getValue(now) ?? "-";
+			const lon = props?.lon?.getValue(now) ?? "-";
+			const lat = props?.lat?.getValue(now) ?? "-";
+			const status = props?.status?.getValue(now) ?? "-";
+			const url = props?.url?.getValue(now) ?? "";
 
 			infoEl.innerHTML = `
-				<strong>${entity.name}</strong>
-				id: ${entity.id}<br>
-				class: ${markerClass}<br>
-				category: ${category}<br>
-				status: ${completed}<br>
-				lon: ${lon}<br>
-				lat: ${lat}
-			`;
+		<strong>${entity.name}</strong>
+		id: ${entity.id}<br>
+		class: ${markerClass}<br>
+		category: ${category}<br>
+		status: ${STATUS_LABEL[status] || status}<br>
+		lon: ${lon}<br>
+		lat: ${lat}
+	`;
+
+			if (url) {
+				window.location.href = url;
+			}
 		}, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+		// 특정 markerClass show/hide
+		function setVisibleByMarkerClass(targetClass, visible) {
+			viewer.entities.values.forEach((entity) => {
+				const cls = entity.properties?.markerClass?.getValue(Cesium.JulianDate.now());
+				if (cls === targetClass) {
+					entity.show = visible;
+				}
+			});
+		}
+
+		// 특정 category 색상 변경
+		function updatePointColorByCategory(category, color) {
+			viewer.entities.values.forEach((entity) => {
+				const currentCategory = entity.properties?.category?.getValue(Cesium.JulianDate.now());
+				if (currentCategory === category && entity.point) {
+					entity.point.color = color;
+				}
+			});
+		}
 	</script>
 </body>
 

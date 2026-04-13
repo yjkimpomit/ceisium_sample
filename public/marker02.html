@@ -47,6 +47,7 @@
 	<script>
 		Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJkODk4ZDliNS03NGQ4LTRiYmUtOTg1NS1iOTE1MmRmYTg0NmQiLCJpZCI6MzI4MzY5LCJpYXQiOjE3NTQyNzk4MjF9.o2SCIP-TECRFhK9xKGkFGEKfaCxRrOk143V_9k4ZXQA';
 
+		// 1) Viewer 생성
 		const viewer = new Cesium.Viewer("cesiumContainer", {
 			animation: false,
 			timeline: false,
@@ -54,6 +55,7 @@
 			infoBox: false
 		});
 
+		// 2) 시작 카메라
 		viewer.camera.flyTo({
 			destination: Cesium.Cartesian3.fromDegrees(127.5, 37.0, 800000),
 			orientation: {
@@ -63,6 +65,8 @@
 			}
 		});
 
+		// 3) 마커 데이터
+		// markerClass: HTML class가 아니라 엔티티 분류용 메타데이터
 		// completed: true = 완성 / false = 미완성
 		const markerData = [
 			{
@@ -75,7 +79,8 @@
 				category: "Complex Division",
 				color: Cesium.Color.fromBytes(20, 140, 234),
 				labelText: "평택발전본부",
-				completed: true
+				completed: true,
+				url: "https://google.com"
 			},
 			{
 				id: "marker-02",
@@ -98,7 +103,7 @@
 				markerClass: "heat-division",
 				category: "Heat & Power Division",
 				color: Cesium.Color.fromBytes(156, 40, 176),
-				labelText: "김포발전본부",
+				labelText: "김포발전본부(준비중)",
 				completed: true
 			},
 			{
@@ -127,24 +132,28 @@
 			}
 		];
 
+		// 4) 엔티티 생성 함수
 		function addMarker(item) {
 			const isCompleted = item.completed !== false;
-
 			return viewer.entities.add({
 				id: item.id,
 				name: item.name,
+
 				position: Cesium.Cartesian3.fromDegrees(item.lon, item.lat, item.height),
 
+				// "클래스"처럼 사용할 메타데이터
 				properties: new Cesium.PropertyBag({
 					markerClass: item.markerClass,
 					category: item.category,
 					lon: item.lon,
 					lat: item.lat,
-					completed: isCompleted
+					completed: isCompleted,
+					url: item.url
 				}),
 
+				// 간단한 점 마커
 				point: {
-					pixelSize: isCompleted ? 20 : 12,
+					pixelSize: isCompleted ? 20 : 10,
 					color: isCompleted
 						? item.color
 						: Cesium.Color.fromBytes(140, 140, 140),
@@ -153,6 +162,7 @@
 					disableDepthTestDistance: Number.POSITIVE_INFINITY
 				},
 
+				// 라벨
 				label: {
 					text: item.labelText,
 					font: isCompleted ? "bold 24px 'Noto Sans KR'" : "bold 24px 'Noto Sans KR'",
@@ -166,6 +176,8 @@
 					verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
 					pixelOffset: new Cesium.Cartesian2(0, -18),
 					disableDepthTestDistance: Number.POSITIVE_INFINITY,
+
+					// 멀리서 라벨이 너무 크지 않게
 					scaleByDistance: new Cesium.NearFarScalar(500, 1.0, 10000, 0.8),
 					translucencyByDistance: new Cesium.NearFarScalar(500, 1.0, 30000, 0.6),
 
@@ -175,12 +187,16 @@
 			});
 		}
 
+		// 5) 마커 추가
 		const entities = markerData.map(addMarker);
 
+		// 6) 겹침 처리 - 클러스터링
+		// 가까운 엔티티를 묶어 숫자로 보여줌
 		viewer.entities.cluster.enabled = true;
 		viewer.entities.cluster.pixelRange = 40;
 		viewer.entities.cluster.minimumClusterSize = 2;
 
+		// 7) 클러스터 스타일 커스터마이징
 		viewer.entities.cluster.clusterEvent.addEventListener(function (clusteredEntities, cluster) {
 			cluster.label.show = true;
 			cluster.label.text = clusteredEntities.length.toString();
@@ -193,6 +209,7 @@
 			cluster.label.backgroundColor = Cesium.Color.fromBytes(30, 70, 140, 220);
 			cluster.label.disableDepthTestDistance = Number.POSITIVE_INFINITY;
 
+			// 기본 빌보드/포인트는 숨기고 라벨형 클러스터만 사용
 			cluster.billboard.show = false;
 			cluster.point.show = true;
 			cluster.point.pixelSize = 28;
@@ -202,91 +219,62 @@
 			cluster.point.disableDepthTestDistance = Number.POSITIVE_INFINITY;
 		});
 
+		// 8) 클릭 처리
 		const infoEl = document.getElementById("markerInfo");
 		const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
 
-		// 현재 hover 중인 엔티티 추적
-		let hoveredEntity = null;
-
-		function resetMarkerStyle(entity) {
-			if (!entity || !entity.label || !entity.properties) return;
-
-			const isCompleted = entity.properties.completed?.getValue(Cesium.JulianDate.now());
-
-			if (isCompleted) {
-				entity.label.show = true;
-				entity.label.font = "bold 24px 'Noto Sans KR'";
-			} else {
-				entity.label.show = false;
-				entity.label.font = "bold 24px 'Noto Sans KR'";
-			}
-		}
-
-		function applyHoverStyle(entity) {
-			if (!entity || !entity.label || !entity.properties) return;
-
-			const isCompleted = entity.properties.completed?.getValue(Cesium.JulianDate.now());
-
-			if (isCompleted) {
-				entity.label.show = true;
-				entity.label.font = "bold 32px 'Noto Sans KR'";
-			} else {
-				entity.label.show = true;
-				entity.label.font = "bold 24px 'Noto Sans KR'";
-			}
-		}
-
-		// hover 처리
-		handler.setInputAction(function (movement) {
-			const picked = viewer.scene.pick(movement.endPosition);
-
-			if (hoveredEntity && (!Cesium.defined(picked) || picked.id !== hoveredEntity)) {
-				resetMarkerStyle(hoveredEntity);
-				hoveredEntity = null;
-			}
-
-			if (Cesium.defined(picked) && picked.id) {
-				const entity = picked.id;
-
-				if (hoveredEntity !== entity) {
-					if (hoveredEntity) {
-						resetMarkerStyle(hoveredEntity);
-					}
-
-					hoveredEntity = entity;
-					applyHoverStyle(entity);
-				}
-			}
-		}, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
-
-		// 클릭 처리
 		handler.setInputAction(function (click) {
 			const picked = viewer.scene.pick(click.position);
 
 			if (!Cesium.defined(picked) || !picked.id) {
-				infoEl.innerHTML = "마커를 클릭하세요.";
+				infoEl.innerHTML = "발전소를 선택하세요.";
 				return;
 			}
 
 			const entity = picked.id;
 			const props = entity.properties;
-
+			
 			const markerClass = props?.markerClass?.getValue(Cesium.JulianDate.now()) ?? "-";
 			const category = props?.category?.getValue(Cesium.JulianDate.now()) ?? "-";
 			const lon = props?.lon?.getValue(Cesium.JulianDate.now()) ?? "-";
 			const lat = props?.lat?.getValue(Cesium.JulianDate.now()) ?? "-";
-			const completed = props?.completed?.getValue(Cesium.JulianDate.now()) ? "완성" : "미완성";
 
 			infoEl.innerHTML = `
-				<strong>${entity.name}</strong>
-				id: ${entity.id}<br>
-				class: ${markerClass}<br>
-				category: ${category}<br>
-				status: ${completed}<br>
-				lon: ${lon}<br>
-				lat: ${lat}
-			`;
+        <strong>${entity.name}</strong>
+        id: ${entity.id}<br>
+        class: ${markerClass}<br>
+        category: ${category}<br>
+        lon: ${lon}<br>
+        lat: ${lat}
+      `;
 		}, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+		// 9) 특정 "클래스"만 보이기/숨기기 예시
+		function setVisibleByMarkerClass(targetClass, visible) {
+			viewer.entities.values.forEach((entity) => {
+				const cls = entity.properties?.markerClass?.getValue(Cesium.JulianDate.now());
+				if (cls === targetClass) {
+					entity.show = visible;
+				}
+			});
+		}
+
+		// 예시 사용:
+		// setVisibleByMarkerClass("spot-bridge", false);
+
+		// 10) 특정 category 색상 일괄 변경 예시
+		function updatePointColorByCategory(category, color) {
+			viewer.entities.values.forEach((entity) => {
+				const currentCategory = entity.properties?.category?.getValue(Cesium.JulianDate.now());
+				if (currentCategory === category && entity.point) {
+					entity.point.color = color;
+				}
+			});
+		}
+
+		// 예시 사용:
+		// updatePointColorByCategory("park", Cesium.Color.RED);
+
 	</script>
 </body>
 
